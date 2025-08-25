@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/gommon/log"
 	"github.com/priyankishorems/transmyaction/api"
 	"github.com/priyankishorems/transmyaction/api/handlers"
+	"github.com/priyankishorems/transmyaction/internal/data"
 	"github.com/priyankishorems/transmyaction/utils"
 )
 
@@ -29,12 +30,12 @@ func main() {
 	flag.Parse()
 	log.SetHeader("${time_rfc3339} ${level}")
 
-	// db := data.PSQLDB{}
-	// dbPool, err := db.Open()
-	// if err != nil {
-	// 	log.Fatalf("error in opening db; %v", err)
-	// }
-	// defer dbPool.Close()
+	db := data.SQLiteDB{}
+	dbPool, err := db.Open()
+	if err != nil {
+		log.Fatalf("error in opening db; %v", err)
+	}
+	defer dbPool.Close()
 
 	validate = *validator.New()
 
@@ -42,7 +43,7 @@ func main() {
 		Config:   *cfg,
 		Validate: validate,
 		Utils:    utils.NewUtils(),
-		// Data:     data.NewModel(dbPool),
+		Data:     data.NewModel(dbPool),
 		// RedditBot: redditBot,
 	}
 

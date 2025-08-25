@@ -12,14 +12,21 @@ func SetupRoutes(h *handlers.Handlers) *echo.Echo {
 		// AllowOrigins:     []string{"http://localhost:5173"},
 		AllowCredentials: true,
 	}))
-	// e.Use(IPRateLimit(h))
+	e.Use(IPRateLimit(h))
 	e.Use(middleware.RemoveTrailingSlash())
-	e.Static("/static", "static")
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		c.Logger().Error(err)
+		e.DefaultHTTPErrorHandler(err, c)
+	}
 
 	e.HideBanner = true
-	e.Renderer = handlers.InitTemplates()
 
+	h.InitOAuth()
 	e.GET("/", h.HomeFunc)
+	e.GET("/login", h.LoginHandler)
+	e.GET("/oauth2/callback", h.CallbackHandler)
+
+	e.GET("/gmail/:email", h.GmailHandler)
 
 	// api := e.Group("/api")
 	// {

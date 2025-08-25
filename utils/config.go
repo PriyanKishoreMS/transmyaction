@@ -11,25 +11,24 @@ import (
 )
 
 var (
-	DBName     string = os.Getenv("DB_DATABASE")
-	DBUsername string = os.Getenv("DB_USERNAME")
-	DBPassword string = os.Getenv("DB_PASSWORD")
-	DBPort     string = os.Getenv("DB_PORT")
-	DBHost     string = os.Getenv("DB_HOST")
-	JWTSecret  string = os.Getenv("JWT_SECRET")
-	JWTIssuer  string = os.Getenv("JWT_ISSUER")
+	DBName       string = os.Getenv("DB_DATABASE")
+	JWTSecret    string = os.Getenv("JWT_SECRET")
+	JWTIssuer    string = os.Getenv("JWT_ISSUER")
+	ClientID     string = os.Getenv("GOOGLE_CLIENT_ID")
+	ClientSecret string = os.Getenv("GOOGLE_CLIENT_SECRET")
+	RedirectURL  string = os.Getenv("GOOGLE_REDIRECT_URL")
 )
 
 // var (
 // 	OauthConfig = &oauth2.Config{
-// 		ClientID:     RedditIdWeb,
-// 		ClientSecret: RedditSecretWeb,
+// 		ClientID:     ClientID,
+// 		ClientSecret: ClientSecret,
 // 		RedirectURL:  RedirectURL,
-// 		Endpoint: oauth2.Endpoint{
-// 			AuthURL:  "https://www.reddit.com/api/v1/authorize",
-// 			TokenURL: "https://www.reddit.com/api/v1/access_token",
+// 		Scopes: []string{
+// 			"https://www.googleapis.com/auth/userinfo.email",
+// 			"https://www.googleapis.com/auth/userinfo.profile",
 // 		},
-// 		Scopes: []string{"identity", "read"},
+// 		Endpoint: google.Endpoint,
 // 	}
 // )
 
