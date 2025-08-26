@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -18,15 +19,15 @@ type Token struct {
 	Expiry       time.Time `db:"expiry"`
 }
 
-func (t TokensModel) SaveEmailToken(email string, token *oauth2.Token) error {
+func (t TokensModel) SaveEmailToken(email string, name string, token *oauth2.Token) error {
 	ctx, cancel := Handlectx()
 	defer cancel()
 
 	query := `
 	INSERT INTO gmail_tokens (
-  	user_email, access_token, refresh_token, token_type, expiry, updated_at
+  	user_email, user_name, access_token, refresh_token, token_type, expiry, updated_at
 		) VALUES (
-  		?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+  		?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
 		)
 	ON CONFLICT(user_email) DO UPDATE SET
   	access_token  = excluded.access_token,
@@ -36,7 +37,7 @@ func (t TokensModel) SaveEmailToken(email string, token *oauth2.Token) error {
 	refresh_token = excluded.refresh_token
 `
 
-	_, err := t.DB.ExecContext(ctx, query, email, token.AccessToken, token.RefreshToken, token.TokenType, token.Expiry)
+	_, err := t.DB.ExecContext(ctx, query, email, name, token.AccessToken, token.RefreshToken, token.TokenType, token.Expiry)
 	if err != nil {
 		return err
 	}
@@ -57,7 +58,7 @@ func (t TokensModel) GetTokenFromEmail(email string) (*oauth2.Token, error) {
 	var tok Token
 
 	if err := t.DB.GetContext(ctx, &tok, query, email); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't get token from email: %v", err)
 	}
 
 	token := &oauth2.Token{
@@ -74,13 +75,15 @@ func (t TokensModel) UpdateTokens(refreshed *oauth2.Token, email string) error {
 	ctx, cancel := Handlectx()
 	defer cancel()
 
+	fmt.Println("test nigga", refreshed.AccessToken, refreshed.Expiry, refreshed.RefreshToken, refreshed.TokenType, email, "end nigga")
+
 	_, err := t.DB.ExecContext(ctx, `
 			UPDATE gmail_tokens
-			SET access_token = ?, expiry = ?, refresh_token = ?, token_type = ?,
+			SET access_token = ?, expiry = ?, refresh_token = ?, token_type = ?, updated_at = CURRENT_TIMESTAMP
 			WHERE user_email = ?
 		`, refreshed.AccessToken, refreshed.Expiry, refreshed.RefreshToken, refreshed.TokenType, email)
 	if err != nil {
-		return err
+		return fmt.Errorf("error in updating token: %v", err)
 	}
 	return nil
 }

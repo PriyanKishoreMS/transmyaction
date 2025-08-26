@@ -14,10 +14,12 @@ func Handlectx() (context.Context, context.CancelFunc) {
 
 type Models struct {
 	Tokens TokensModel
+	Txns   TxnModel
 }
 
 func NewModel(db *sqlx.DB) Models {
 	return Models{
 		Tokens: TokensModel{DB: db},
+		Txns:   TxnModel{DB: db},
 	}
 }

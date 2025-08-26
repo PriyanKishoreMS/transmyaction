@@ -4,6 +4,7 @@
 CREATE TABLE gmail_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_email TEXT NOT NULL UNIQUE,
+    user_name TEXT NOT NULL,
     access_token TEXT NOT NULL,
     refresh_token TEXT,
     token_type TEXT,
@@ -15,5 +16,5 @@ CREATE TABLE gmail_tokens (
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
+DROP TABLE gmail_tokens;
 -- +goose StatementEnd

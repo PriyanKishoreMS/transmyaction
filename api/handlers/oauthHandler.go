@@ -37,16 +37,17 @@ func (h *Handlers) LoginHandler(c echo.Context) error {
 
 type GoogleUserInfo struct {
 	Email         string `json:"email"`
+	Name          string `json:"name"`
 	VerifiedEmail bool   `json:"verified_email"`
 	Picture       string `json:"picture"`
 }
 
-func getUserEmail(token *oauth2.Token) (string, error) {
+func getUserEmail(token *oauth2.Token) (*GoogleUserInfo, error) {
 	client := oauthConfig.Client(context.Background(), token)
 
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		return "", fmt.Errorf("failed to get userinfo: %v", err)
+		return nil, fmt.Errorf("failed to get userinfo: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -54,10 +55,10 @@ func getUserEmail(token *oauth2.Token) (string, error) {
 
 	var userInfo GoogleUserInfo
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return "", fmt.Errorf("failed to decode userinfo: %v", err)
+		return nil, fmt.Errorf("failed to decode userinfo: %v", err)
 	}
 
-	return userInfo.Email, nil
+	return &userInfo, nil
 }
 
 func (h *Handlers) CallbackHandler(c echo.Context) error {
@@ -75,17 +76,17 @@ func (h *Handlers) CallbackHandler(c echo.Context) error {
 
 	fmt.Println("token: ", token)
 
-	email, err := getUserEmail(token)
+	userinfo, err := getUserEmail(token)
 	if err != nil {
 		h.Utils.InternalServerError(c, err)
 		return fmt.Errorf("failed to fetch email: " + err.Error())
 	}
 
-	fmt.Println("User email:", email)
+	fmt.Println("User email:", userinfo)
 
 	fmt.Println("refresh_tokem: ", token.RefreshToken)
 
-	err = h.Data.Tokens.SaveEmailToken(email, token)
+	err = h.Data.Tokens.SaveEmailToken(userinfo.Email, userinfo.Name, token)
 	if err != nil {
 		h.Utils.InternalServerError(c, err)
 		return fmt.Errorf("can't' save token: %v", err)
