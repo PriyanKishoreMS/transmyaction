@@ -25,8 +25,11 @@ func SetupRoutes(h *handlers.Handlers) *echo.Echo {
 	e.GET("/", h.HomeFunc)
 	e.GET("/login", h.LoginHandler)
 	e.GET("/oauth2/callback", h.CallbackHandler)
+	e.GET("/refresh", h.RefreshTokenHandler, Authenticate(*h))
 
-	e.GET("/gmail/:email", h.GmailHandler)
+	e.POST("/txns/:email", h.UpdateTransactionsHandler, Authenticate(*h))
+	e.GET("/txns/:email/:interval/:year/:month", h.GetTransactionsHandler, Authenticate(*h))
+	e.GET("/txns/:email", h.GetTransactionsHandler, Authenticate(*h))
 
 	// api := e.Group("/api")
 	// {

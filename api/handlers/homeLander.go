@@ -19,7 +19,7 @@ type Handlers struct {
 
 func (h *Handlers) HomeFunc(c echo.Context) error {
 	msg := Cake{
-		"message": "Welcome to SubredditCinema API",
+		"message": "Welcome to Transmyaction API",
 		"status":  "available",
 		"system_info": Cake{
 			"environment": h.Config.Env,

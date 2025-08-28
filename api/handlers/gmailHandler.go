@@ -49,48 +49,60 @@ func (h *Handlers) updateTokens(token *oauth2.Token, email string) (*oauth2.Toke
 	return refreshedToken, nil
 }
 
-func (h *Handlers) GmailHandler(c echo.Context) error {
+func (h *Handlers) UpdateTransactionsHandler(c echo.Context) error {
 
 	email := c.Param("email")
 
-	token, err := h.Data.Tokens.GetTokenFromEmail(email)
-	if err != nil {
-		h.Utils.InternalServerError(c, err)
-		return fmt.Errorf("can't get token from db: %v", err)
-	}
+	requestID := fmt.Sprintf("REQ-%d", time.Now().UnixNano())
 
-	refreshedToken, err := h.updateTokens(token, email)
-	if err != nil {
-		h.Utils.InternalServerError(c, err)
-		return fmt.Errorf("can't refresh token: %v", err)
-	}
+	c.Response().Header().Set("Content-Type", "application/json")
+	c.Response().WriteHeader(http.StatusOK)
+	c.Response().Write([]byte(fmt.Sprintf(`{"message":"Processing started","request_id":"%s","status":"in_progress"}`, requestID)))
+	c.Response().Flush()
 
-	token = refreshedToken
+	fmt.Printf("BROWSER RESPONSE SENT - Processing continues in background\n")
 
-	srv, err := GmailService(token)
-	if err != nil {
-		h.Utils.InternalServerError(c, err)
-		return fmt.Errorf("can't get gmail service: %v", err)
-	}
+	go func() {
 
-	allTxns, err := getAllMails(srv, email, "alerts@axisbank.com", "2025/07/01")
-	if err != nil {
-		h.Utils.InternalServerError(c, err)
-		return fmt.Errorf("can't get mails: %v", err)
-	}
+		token, err := h.Data.Tokens.GetTokenFromEmail(email)
+		if err != nil {
+			h.Utils.InternalServerError(c, err)
+			return
+		}
 
-	err = h.Data.Txns.SaveTransactions(allTxns)
-	if err != nil {
-		h.Utils.InternalServerError(c, err)
-		return fmt.Errorf("can't add mails in db: %v", err)
-	}
+		refreshedToken, err := h.updateTokens(token, email)
+		if err != nil {
+			h.Utils.InternalServerError(c, err)
+			return
+		}
 
-	return c.JSON(http.StatusOK, Cake{
-		"message": "wokring",
-	})
+		token = refreshedToken
+
+		srv, err := GmailService(token)
+		if err != nil {
+			h.Utils.InternalServerError(c, err)
+			return
+		}
+
+		allTxns, err := postAllMails(srv, email, "alerts@axisbank.com", "2025/07/01")
+		if err != nil {
+			h.Utils.InternalServerError(c, err)
+			return
+		}
+
+		err = h.Data.Txns.SaveTransactions(allTxns)
+		if err != nil {
+			h.Utils.InternalServerError(c, err)
+			return
+		}
+
+	}()
+
+	return nil
 }
 
-func getAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate string) ([]utils.Transaction, error) {
+func postAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate string) ([]utils.Transaction, error) {
+	var allTxn []utils.Transaction
 
 	call := srv.Users.Messages.List("me").
 		Q(fmt.Sprintf("from:%s after:%s", mailID, afterDate)).MaxResults(500)
@@ -101,7 +113,7 @@ func getAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate 
 
 	}
 
-	var allTxn []utils.Transaction
+	fmt.Println("length of msgs bro: ", len(msgs.Messages))
 
 	for i, m := range msgs.Messages {
 		full, err := srv.Users.Messages.Get("me", m.Id).Format("full").Do()
@@ -113,12 +125,16 @@ func getAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate 
 
 		body, err := extractBody(full)
 		if err != nil {
-			return nil, fmt.Errorf("can't extract body: %v", err)
+			fmt.Printf("can't extract body: %v", err)
 		}
 
 		fmt.Println("Extracted email no: ", i+1)
 
 		txn, err := parseAxisEmail(body, userEmail)
+		if err != nil {
+			// not all mails will be valid transactions, just skip
+			continue
+		}
 
 		for _, h := range full.Payload.Headers {
 			if h.Name == "Date" {
@@ -128,11 +144,6 @@ func getAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate 
 		}
 
 		allTxn = append(allTxn, *txn)
-
-		if err != nil {
-			// not all mails will be valid transactions, just skip
-			continue
-		}
 
 		fmt.Printf("Transaction: %v", txn)
 	}
@@ -201,35 +212,25 @@ func parseAxisEmail(body, userEmail string) (*utils.Transaction, error) {
 	// }
 
 	// txn info
-	reTxnInfo := regexp.MustCompile(`([A-Z0-9\.]+(?:/[A-Z0-9\.]+)+/(?:[A-Z0-9 ]+))`)
+	reTxnInfo := regexp.MustCompile(`([A-Za-z0-9\.]+(?:/[A-Za-z0-9\.]+)+/(?:[A-Za-z0-9 ]+))`)
 	if match := reTxnInfo.FindStringSubmatch(body); match != nil {
 		txn.TxnInfo = strings.TrimSpace(match[1]) // full string
 
 		parts := strings.Split(txn.TxnInfo, "/")
 
-		switch parts[0] {
-		case "UPI":
+		switch len(parts) {
+		case 4:
 			// Expect: UPI / P2A / ref / counterparty
-			if len(parts) >= 2 {
-				txn.TxnMode = parts[1]
-			}
-			if len(parts) >= 3 {
-				txn.TxnRef = parts[2]
-			}
-			if len(parts) >= 4 {
-				txn.CounterParty = strings.TrimSpace(parts[3])
-			}
-			txn.TxnMethod = "UPI"
+			txn.TxnMode = parts[1]
+			txn.TxnRef = parts[2]
+			txn.CounterParty = strings.TrimSpace(parts[3])
+			txn.TxnMethod = parts[0]
 
-		case "NEFT":
+		case 3:
 			// Expect: NEFT / ref / counterparty
-			if len(parts) >= 2 {
-				txn.TxnRef = parts[1]
-			}
-			if len(parts) >= 3 {
-				txn.CounterParty = strings.TrimSpace(parts[2])
-			}
-			txn.TxnMethod = "NEFT"
+			txn.TxnRef = parts[1]
+			txn.CounterParty = strings.TrimSpace(parts[2])
+			txn.TxnMethod = parts[0]
 
 		default:
 			// Fallback — just record whatever we can
@@ -246,50 +247,33 @@ func parseAxisEmail(body, userEmail string) (*utils.Transaction, error) {
 	return &txn, nil
 }
 
-// Q(`from:alerts@axisbank.com after:2025/02/25`).
+func (h *Handlers) GetTransactionsHandler(c echo.Context) error {
+	email := c.Param("email")
+	interval := c.Param("interval") // "3m", "6m", "1y", etc
 
-// func getAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate string) error {
+	year, _ := strconv.Atoi(c.Param("year"))
+	month, _ := strconv.Atoi(c.Param("month"))
 
-// 	err := srv.Users.Messages.List("me").
-// 		Q(fmt.Sprintf("from:%s after:%s", mailID, afterDate)).Pages(context.TODO(), func(msgs *gmail.ListMessagesResponse) error {
-// 		for i, m := range msgs.Messages {
-// 			full, err := srv.Users.Messages.Get("me", m.Id).Format("full").Do()
-// 			if err != nil {
-// 				return fmt.Errorf("can't fetch message %s: %v", m.Id, err)
-// 			}
+	fromStr := c.QueryParam("from") // YYYY-MM-DD
+	toStr := c.QueryParam("to")
 
-// 			fmt.Println("Fetched email no: ", i+1)
+	var from, to *time.Time
+	if fromStr != "" && toStr != "" {
+		f, err := time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid from date"})
+		}
+		t, err := time.Parse("2006-01-02", toStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to date"})
+		}
+		from, to = &f, &t
+	}
 
-// 			body, err := extractBody(full)
-// 			if err != nil {
-// 				return fmt.Errorf("can't extract body: %v", err)
-// 			}
+	txns, err := h.Data.Txns.GetTransactions(email, interval, year, month, from, to)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 
-// 			fmt.Println("Extracted email no: ", i+1)
-
-// 			txn, err := parseAxisEmail(body, userEmail)
-
-// 			for _, h := range full.Payload.Headers {
-// 				if h.Name == "Date" {
-// 					t, _ := time.Parse(time.RFC1123Z, h.Value) // sometimes RFC1123 or RFC822
-// 					txn.TxnDatetime = t
-// 				}
-// 			}
-
-// 			if err != nil {
-// 				// not all mails will be valid transactions, just skip
-// 				continue
-// 			}
-
-// 			fmt.Printf("Transaction: %v", txn)
-// 		}
-// 		return nil
-// 	})
-
-// 	if err != nil {
-// 		return fmt.Errorf("can't get mails: %v", err)
-
-// 	}
-
-// 	return nil
-// }
+	return c.JSON(http.StatusOK, txns)
+}

@@ -2,14 +2,70 @@ package api
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/pascaldekloe/jwt"
 	"github.com/priyankishorems/transmyaction/api/handlers"
+	"github.com/priyankishorems/transmyaction/utils"
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
 )
+
+var (
+	ErrUserUnauthorized = echo.NewHTTPError(http.StatusUnauthorized, "user unauthorized")
+)
+
+func Authenticate(h handlers.Handlers) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Response().Writer.Header().Add("Vary", "Authorization")
+
+			authorizationHeader := c.Request().Header.Get("Authorization")
+			if authorizationHeader == "" {
+				err := fmt.Errorf("authorization header not found")
+				h.Utils.UserUnAuthorizedResponse(c, err)
+				return ErrUserUnauthorized
+			}
+
+			headerParts := strings.Split(authorizationHeader, " ")
+			if len(headerParts) != 2 || headerParts[0] != "Bearer" {
+				err := fmt.Errorf("invalid authorization header")
+				h.Utils.UserUnAuthorizedResponse(c, err)
+				return ErrUserUnauthorized
+			}
+
+			token := headerParts[1]
+
+			claims, err := jwt.HMACCheck([]byte(token), []byte(h.Config.JWT.Secret))
+			if err != nil {
+				h.Utils.UserUnAuthorizedResponse(c, err)
+				return ErrUserUnauthorized
+			}
+
+			if !claims.Valid(time.Now()) {
+				h.Utils.CustomErrorResponse(c, utils.Cake{"token expired": "Send refresh token"}, http.StatusUnauthorized, ErrUserUnauthorized)
+				return ErrUserUnauthorized
+			}
+
+			if claims.Issuer != h.Config.JWT.Issuer {
+				err := fmt.Errorf("invalid issuer")
+				h.Utils.UserUnAuthorizedResponse(c, err)
+				return ErrUserUnauthorized
+			}
+
+			email := claims.Subject
+
+			c.Set("email", email)
+
+			return next(c)
+		}
+	}
+}
 
 func IPRateLimit(h *handlers.Handlers) echo.MiddlewareFunc {
 

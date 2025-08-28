@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -44,7 +43,6 @@ func main() {
 		Validate: validate,
 		Utils:    utils.NewUtils(),
 		Data:     data.NewModel(dbPool),
-		// RedditBot: redditBot,
 	}
 
 	e := api.SetupRoutes(h)
@@ -52,5 +50,6 @@ func main() {
 	e.Server.WriteTimeout = time.Second * 20
 	e.Server.IdleTimeout = time.Minute
 	e.HideBanner = true
-	e.Logger.Fatal(e.Start(fmt.Sprintf(":%d", cfg.Port)))
+	// e.Logger.Fatal(e.Start(fmt.Sprintf(":%d", cfg.Port)))
+	e.Logger.Fatal(e.Start("0.0.0.0:3000"))
 }

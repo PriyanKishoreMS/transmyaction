@@ -6,12 +6,24 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/labstack/echo/v4"
+	"github.com/pascaldekloe/jwt"
+	"github.com/priyankishorems/transmyaction/internal/data"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
+)
+
+type AuthResponse struct {
+	Username string `json:"username"`
+}
+
+var (
+	ErrUserUnauthorized = echo.NewHTTPError(http.StatusUnauthorized, "user unauthorized")
 )
 
 var oauthConfig *oauth2.Config
@@ -92,67 +104,78 @@ func (h *Handlers) CallbackHandler(c echo.Context) error {
 		return fmt.Errorf("can't' save token: %v", err)
 	}
 
-	return c.Redirect(http.StatusTemporaryRedirect, "http://localhost:5173")
+	accessToken, RefreshToken, err := h.Data.Tokens.GenerateAuthTokens(userinfo.Email, h.Config.JWT.Secret, h.Config.JWT.Issuer)
+	if err != nil {
+		h.Utils.InternalServerError(c, err)
+		return err
+	}
+
+	user := Cake{
+		"email":    userinfo.Email,
+		"username": userinfo.Name,
+		"avatar":   userinfo.Picture,
+	}
+
+	data := Cake{
+		"accessToken":  string(accessToken),
+		"refreshToken": string(RefreshToken),
+		"user":         user,
+	}
+
+	tokensJSON, err := json.Marshal(data)
+	if err != nil {
+		h.Utils.InternalServerError(c, err)
+		return err
+	}
+
+	fmt.Println("tokensJSON here", string(tokensJSON))
+
+	c.SetCookie(&http.Cookie{
+		Name:   "tokens",
+		Value:  url.QueryEscape(string(tokensJSON)),
+		Path:   "/",
+		MaxAge: 30 * 24 * 60 * 60, // 1 month
+		// Domain:   "localhost",
+		HttpOnly: false,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	return c.Redirect(http.StatusTemporaryRedirect, "http://localhost:5173/auth-callback")
 }
 
-// func saveToken(token *oauth2.Token, email string) error {
-// 	filename := "tokens.json"
+func (h *Handlers) RefreshTokenHandler(c echo.Context) error {
 
-// 	file, err := os.Create(filename)
-// 	if err != nil {
-// 		return fmt.Errorf("can't create file: %v", err)
-// 	}
-// 	defer file.Close()
+	c.Response().Writer.Header().Add("Vary", "Authorization")
 
-// 	json.NewEncoder(file).Encode(token)
+	authorizationHeader := c.Request().Header.Get("Authorization")
+	if authorizationHeader == "" {
+		err := fmt.Errorf("authorization header not found")
+		h.Utils.UserUnAuthorizedResponse(c, err)
+		return ErrUserUnauthorized
+	}
 
-// 	return nil
-// }
+	headerParts := strings.Split(authorizationHeader, " ")
+	if len(headerParts) != 2 || headerParts[0] != "Bearer" {
+		err := fmt.Errorf("invalid authorization header")
+		h.Utils.UserUnAuthorizedResponse(c, err)
+		return ErrUserUnauthorized
+	}
 
-// client := oauthConfig.Client(context.Background(), tok)
-// srv, err := gmail.NewService(context.Background(), option.WithHTTPClient(client))
-// if err != nil {
-// 	return c.String(http.StatusInternalServerError, "unable to create Gmail client: "+err.Error())
-// }
+	token := headerParts[1]
 
-// user := "me"
-// msgs, err := srv.Users.Messages.List(user).
-// 	MaxResults(10).
-// 	Do()
-// if err != nil {
-// 	return c.String(http.StatusInternalServerError, "unable to list messages: "+err.Error())
-// }
-// var res string
+	claims, err := jwt.HMACCheck([]byte(token), []byte(h.Config.JWT.Secret))
+	if err != nil {
+		h.Utils.UserUnAuthorizedResponse(c, err)
+		return ErrUserUnauthorized
+	}
 
-// for _, m := range msgs.Messages {
-// 	fullMsg, err := srv.Users.Messages.Get(user, m.Id).Do()
-// 	if err != nil {
-// 		return c.String(http.StatusInternalServerError, "unable to get message: "+err.Error())
-// 	}
+	id := claims.Subject
 
-// 	var from, subject string
-// 	for _, h := range fullMsg.Payload.Headers {
-// 		switch h.Name {
-// 		case "From":
-// 			from = h.Value
-// 		case "Subject":
-// 			subject = h.Value
-// 		}
-// 	}
-
-// 	var body string
-// 	if fullMsg.Payload.Body != nil && fullMsg.Payload.Body.Data != "" {
-// 		decoded, _ := base64.URLEncoding.DecodeString(fullMsg.Payload.Body.Data)
-// 		body = string(decoded)
-// 	} else if len(fullMsg.Payload.Parts) > 0 {
-// 		for _, part := range fullMsg.Payload.Parts {
-// 			if part.MimeType == "text/plain" {
-// 				decoded, _ := base64.URLEncoding.DecodeString(part.Body.Data)
-// 				body = string(decoded)
-// 				break
-// 			}
-// 		}
-// 	}
-
-// 	res += fmt.Sprintf("From: %s\nSubject: %s\nBody: %s\n\n", from, subject, body)
-// }
+	accessToken, err := data.GenerateAccessToken(id, []byte(h.Config.JWT.Secret), h.Config.JWT.Issuer)
+	if err != nil {
+		h.Utils.InternalServerError(c, err)
+		return err
+	}
+	return c.JSON(200, Cake{"accessToken": string(accessToken)})
+}
