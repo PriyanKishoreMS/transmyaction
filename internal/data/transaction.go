@@ -115,3 +115,30 @@ func (t TxnModel) GetTransactions(mail string, interval string, year, month int,
 
 	return txns, rows.Err()
 }
+
+type UserUpdate struct {
+	Email       string    `db:"user_email"`
+	LastUpdated time.Time `db:"last_updated"`
+}
+
+func (t TxnModel) GetAllDistinctEmails() ([]UserUpdate, error) {
+
+	query := `
+		SELECT t.user_email, t.txn_datetime as last_updated
+		FROM transactions t
+		INNER JOIN (
+    		SELECT user_email, MAX(txn_datetime) AS max_txn_datetime
+    		FROM transactions
+    		GROUP BY user_email
+		) t2
+  		ON t.user_email = t2.user_email
+ 		AND t.txn_datetime = t2.max_txn_datetime;
+	`
+
+	var results []UserUpdate
+	if err := t.DB.Select(&results, query); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}

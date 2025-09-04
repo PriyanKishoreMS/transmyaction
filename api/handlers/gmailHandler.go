@@ -101,11 +101,71 @@ func (h *Handlers) UpdateTransactionsHandler(c echo.Context) error {
 	return nil
 }
 
+func FormatTimeForAxis(t time.Time) string {
+
+	t, err := time.Parse(time.RFC3339, t.Format(time.RFC3339))
+	if err != nil {
+		panic(err)
+	}
+
+	// Format into yyyy/mm/dd
+	return t.Format("2006/01/02")
+}
+
+func (h *Handlers) UpdateTransactionsJob() error {
+
+	distinctEmails, err := h.Data.Txns.GetAllDistinctEmails()
+	if err != nil {
+		return nil
+	}
+
+	for _, user := range distinctEmails {
+
+		fmt.Println("Getting token for user:", user.Email)
+		token, err := h.Data.Tokens.GetTokenFromEmail(user.Email)
+		if err != nil {
+			fmt.Println("Error getting token:", err)
+			return nil
+		}
+
+		fmt.Println("Refreshing token for user:", user.Email)
+		refreshedToken, err := h.updateTokens(token, user.Email)
+		if err != nil {
+			return nil
+		}
+
+		token = refreshedToken
+
+		srv, err := GmailService(token)
+		if err != nil {
+			return nil
+		}
+
+		afterDate := FormatTimeForAxis(user.LastUpdated)
+
+		fmt.Println("Fetching mails for user:", user.Email, "after date:", afterDate)
+		allTxns, err := postAllMails(srv, user.Email, "alerts@axisbank.com", afterDate)
+		if err != nil {
+			return nil
+		}
+
+		fmt.Println("Saving transactions for user:", user.Email)
+		err = h.Data.Txns.SaveTransactions(allTxns)
+		if err != nil {
+			return nil
+		}
+		fmt.Println("Saved transactions for user:", user.Email, "count:", len(allTxns))
+		fmt.Println("-----------------------------------------------------")
+	}
+
+	return nil
+}
+
 func postAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate string) ([]utils.Transaction, error) {
 	var allTxn []utils.Transaction
 
 	call := srv.Users.Messages.List("me").
-		Q(fmt.Sprintf("from:%s after:%s", mailID, afterDate)).MaxResults(500)
+		Q(fmt.Sprintf("from:%s after:%s before:%s", mailID, afterDate, time.Now().Add(24*time.Hour).Format("2006/01/02"))).MaxResults(500)
 
 	msgs, err := call.Do()
 	if err != nil {

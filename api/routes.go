@@ -1,9 +1,14 @@
 package api
 
 import (
+	"fmt"
+	"log"
+
+	"github.com/go-co-op/gocron/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/priyankishorems/transmyaction/api/handlers"
+	"github.com/priyankishorems/transmyaction/jobs"
 )
 
 func SetupRoutes(h *handlers.Handlers) *echo.Echo {
@@ -35,6 +40,22 @@ func SetupRoutes(h *handlers.Handlers) *echo.Echo {
 	// {
 
 	// }
+
+	scheduler, err := gocron.NewScheduler()
+	if err != nil {
+		log.Fatal("Error creating scheduler", err)
+	}
+	updateTxnsAtTime := gocron.NewAtTime(00, 00, 00)
+	updateTxnsAtTimes := gocron.NewAtTimes(updateTxnsAtTime)
+
+	updateTxnsnJob, err := jobs.UpdateTxnsJob(*h, scheduler, updateTxnsAtTimes)
+	if err != nil {
+		log.Fatal("Error creating job: ", err)
+	}
+
+	fmt.Println("updateTransactionsJob started: ", updateTxnsnJob.ID())
+
+	scheduler.Start()
 
 	return e
 }
