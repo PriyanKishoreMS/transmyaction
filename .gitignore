@@ -7,3 +7,5 @@ cred*
 .env
 tokens.json
 transmyaction
+/vendor
+/remote

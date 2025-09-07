@@ -11,12 +11,12 @@ import (
 )
 
 var (
-	DBName       string = os.Getenv("DB_DATABASE")
-	JWTSecret    string = os.Getenv("JWT_SECRET")
-	JWTIssuer    string = os.Getenv("JWT_ISSUER")
-	ClientID     string = os.Getenv("GOOGLE_CLIENT_ID")
-	ClientSecret string = os.Getenv("GOOGLE_CLIENT_SECRET")
-	RedirectURL  string = os.Getenv("GOOGLE_REDIRECT_URL")
+	DBName       string = os.Getenv("TXNS_DB_DATABASE")
+	JWTSecret    string = os.Getenv("TXNS_JWT_SECRET")
+	JWTIssuer    string = os.Getenv("TXNS_JWT_ISSUER")
+	ClientID     string = os.Getenv("TXNS_GOOGLE_CLIENT_ID")
+	ClientSecret string = os.Getenv("TXNS_GOOGLE_CLIENT_SECRET")
+	RedirectURL  string = os.Getenv("TXNS_GOOGLE_REDIRECT_URL_PROD")
 )
 
 // var (

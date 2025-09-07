@@ -1,14 +1,9 @@
 package api
 
 import (
-	"fmt"
-	"log"
-
-	"github.com/go-co-op/gocron/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/priyankishorems/transmyaction/api/handlers"
-	"github.com/priyankishorems/transmyaction/jobs"
 )
 
 func SetupRoutes(h *handlers.Handlers) *echo.Echo {
@@ -35,27 +30,36 @@ func SetupRoutes(h *handlers.Handlers) *echo.Echo {
 	e.POST("/txns/:email", h.UpdateTransactionsHandler, Authenticate(*h))
 	e.GET("/txns/:email/:interval/:year/:month", h.GetTransactionsHandler, Authenticate(*h))
 	e.GET("/txns/:email", h.GetTransactionsHandler, Authenticate(*h))
+	e.POST("/txns/update", h.UpdateTransactionsHandler, Authenticate(*h))
 
 	// api := e.Group("/api")
 	// {
 
 	// }
 
-	scheduler, err := gocron.NewScheduler()
-	if err != nil {
-		log.Fatal("Error creating scheduler", err)
-	}
-	updateTxnsAtTime := gocron.NewAtTime(00, 00, 00)
-	updateTxnsAtTimes := gocron.NewAtTimes(updateTxnsAtTime)
+	// istLocation, err := time.LoadLocation("Asia/Kolkata")
+	// if err != nil {
+	// 	log.Fatal("Error loading IST timezone:", err)
+	// }
 
-	updateTxnsnJob, err := jobs.UpdateTxnsJob(*h, scheduler, updateTxnsAtTimes)
-	if err != nil {
-		log.Fatal("Error creating job: ", err)
-	}
+	// scheduler, err := gocron.NewScheduler(
+	// 	gocron.WithLocation(istLocation),
+	// )
+	// if err != nil {
+	// 	log.Fatal("Error creating scheduler", err)
+	// }
 
-	fmt.Println("updateTransactionsJob started: ", updateTxnsnJob.ID())
+	// updateTxnsAtTime := gocron.NewAtTime(00, 00, 00)
+	// updateTxnsAtTimes := gocron.NewAtTimes(updateTxnsAtTime)
 
-	scheduler.Start()
+	// updateTxnsnJob, err := jobs.UpdateTxnsJob(*h, scheduler, updateTxnsAtTimes)
+	// if err != nil {
+	// 	log.Fatal("Error creating job: ", err)
+	// }
+
+	// fmt.Println("updateTransactionsJob started: ", updateTxnsnJob.ID())
+
+	// scheduler.Start()
 
 	return e
 }

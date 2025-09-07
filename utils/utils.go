@@ -20,6 +20,8 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+var Prod = true
+
 type Utilities interface {
 	ConvertToInt64(str string) (int64, error)
 	ReadIntParam(c echo.Context, str string) (int, error)

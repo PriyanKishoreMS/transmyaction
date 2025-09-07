@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pascaldekloe/jwt"
 	"github.com/priyankishorems/transmyaction/internal/data"
+	"github.com/priyankishorems/transmyaction/utils"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
@@ -29,7 +30,13 @@ var (
 var oauthConfig *oauth2.Config
 
 func (h *Handlers) InitOAuth() {
-	b, err := os.ReadFile("credentials.json")
+
+	credFileName := "credentials.json"
+	if !utils.Prod {
+		credFileName = "credentials_dev.json"
+	}
+
+	b, err := os.ReadFile(credFileName)
 	if err != nil {
 		log.Fatalf("unable to read client secret: %v", err)
 	}
@@ -130,18 +137,29 @@ func (h *Handlers) CallbackHandler(c echo.Context) error {
 
 	fmt.Println("tokensJSON here", string(tokensJSON))
 
+	Domain := "priyankishore.dev"
+	if !utils.Prod {
+		Domain = "localhost"
+	}
+
 	c.SetCookie(&http.Cookie{
-		Name:   "tokens",
-		Value:  url.QueryEscape(string(tokensJSON)),
-		Path:   "/",
-		MaxAge: 30 * 24 * 60 * 60, // 1 month
-		// Domain:   "localhost",
+		Name:     "tokens",
+		Value:    url.QueryEscape(string(tokensJSON)),
+		Path:     "/",
+		MaxAge:   30 * 24 * 60 * 60, // 1 month
+		Domain:   Domain,
 		HttpOnly: false,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	return c.Redirect(http.StatusTemporaryRedirect, "http://localhost:5173/auth-callback")
+	redirectURL := "https://txns.priyankishore.dev/auth-callback"
+
+	if !utils.Prod {
+		redirectURL = "http://localhost:5173/auth-callback"
+	}
+
+	return c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 func (h *Handlers) RefreshTokenHandler(c echo.Context) error {

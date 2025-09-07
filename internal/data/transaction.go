@@ -142,3 +142,22 @@ func (t TxnModel) GetAllDistinctEmails() ([]UserUpdate, error) {
 
 	return results, nil
 }
+
+func (t TxnModel) GetLastUpdated(email string) (time.Time, error) {
+	var lastUpdated time.Time
+
+	query := `
+		SELECT txn_datetime
+		FROM transactions
+		WHERE user_email = ?
+		ORDER BY txn_datetime DESC
+		LIMIT 1
+	`
+
+	err := t.DB.Get(&lastUpdated, query, email)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return lastUpdated, nil
+}

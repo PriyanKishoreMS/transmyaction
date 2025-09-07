@@ -24,6 +24,8 @@ func (t TokensModel) SaveEmailToken(email string, name string, token *oauth2.Tok
 	ctx, cancel := Handlectx()
 	defer cancel()
 
+	fmt.Println("saving token for ", email, name, token)
+
 	query := `
 	INSERT INTO gmail_tokens (
   	user_email, user_name, access_token, refresh_token, token_type, expiry, updated_at

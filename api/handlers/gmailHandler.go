@@ -51,7 +51,9 @@ func (h *Handlers) updateTokens(token *oauth2.Token, email string) (*oauth2.Toke
 
 func (h *Handlers) UpdateTransactionsHandler(c echo.Context) error {
 
-	email := c.Param("email")
+	email := c.Get("email").(string)
+
+	fmt.Printf("Starting UpdateTransactionsHandler for %s\n", email)
 
 	requestID := fmt.Sprintf("REQ-%d", time.Now().UnixNano())
 
@@ -84,7 +86,15 @@ func (h *Handlers) UpdateTransactionsHandler(c echo.Context) error {
 			return
 		}
 
-		allTxns, err := postAllMails(srv, email, "alerts@axisbank.com", "2025/07/01")
+		lastUpdated, err := h.Data.Txns.GetLastUpdated(email)
+		if err != nil {
+			h.Utils.InternalServerError(c, err)
+			return
+		}
+
+		afterDate := FormatTimeForAxis(lastUpdated)
+
+		allTxns, err := postAllMails(srv, email, "alerts@axisbank.com", afterDate)
 		if err != nil {
 			h.Utils.InternalServerError(c, err)
 			return
@@ -119,6 +129,8 @@ func (h *Handlers) UpdateTransactionsJob() error {
 		return nil
 	}
 
+	fmt.Println(distinctEmails, "distince email")
+
 	for _, user := range distinctEmails {
 
 		fmt.Println("Getting token for user:", user.Email)
@@ -131,14 +143,16 @@ func (h *Handlers) UpdateTransactionsJob() error {
 		fmt.Println("Refreshing token for user:", user.Email)
 		refreshedToken, err := h.updateTokens(token, user.Email)
 		if err != nil {
-			return nil
+			fmt.Println("Error refreshing token for user:", user.Email, ":", err)
+			continue
 		}
 
 		token = refreshedToken
 
 		srv, err := GmailService(token)
 		if err != nil {
-			return nil
+			fmt.Println("Error creating Gmail service:", err)
+			continue
 		}
 
 		afterDate := FormatTimeForAxis(user.LastUpdated)
@@ -146,13 +160,15 @@ func (h *Handlers) UpdateTransactionsJob() error {
 		fmt.Println("Fetching mails for user:", user.Email, "after date:", afterDate)
 		allTxns, err := postAllMails(srv, user.Email, "alerts@axisbank.com", afterDate)
 		if err != nil {
-			return nil
+			fmt.Println("Error fetching mails for user:", user.Email, ":", err)
+			continue
 		}
 
 		fmt.Println("Saving transactions for user:", user.Email)
 		err = h.Data.Txns.SaveTransactions(allTxns)
 		if err != nil {
-			return nil
+			fmt.Println("Error saving transactions for user:", user.Email, ":", err)
+			continue
 		}
 		fmt.Println("Saved transactions for user:", user.Email, "count:", len(allTxns))
 		fmt.Println("-----------------------------------------------------")
@@ -196,10 +212,11 @@ func postAllMails(srv *gmail.Service, userEmail string, mailID string, afterDate
 			continue
 		}
 
+		ist, _ := time.LoadLocation("Asia/Kolkata")
 		for _, h := range full.Payload.Headers {
 			if h.Name == "Date" {
 				t, _ := time.Parse(time.RFC1123Z, h.Value) // sometimes RFC1123 or RFC822
-				txn.TxnDatetime = t
+				txn.TxnDatetime = t.In(ist)
 			}
 		}
 
