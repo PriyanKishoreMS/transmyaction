@@ -56,6 +56,29 @@ func (t TxnModel) SaveTransactions(allTxn []utils.Transaction) error {
 	return nil
 }
 
+func (t TxnModel) InsertTransaction(txn utils.Transaction) error {
+	query := `
+			INSERT INTO transactions (
+				user_email, amount, account_number, txn_method, txn_mode, txn_type,
+				txn_ref, counter_party, txn_info, txn_datetime
+			)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+	_, err := t.DB.Exec(query,
+		txn.UserEmail,
+		txn.Amount,
+		txn.AccountNumber,
+		txn.TxnMethod,
+		txn.TxnMode,
+		txn.TxnType,
+		txn.TxnRef,
+		txn.CounterParty,
+		txn.TxnInfo,
+		txn.TxnDatetime,
+	)
+	return err
+}
+
 func (t TxnModel) GetTransactions(mail string, interval string, year, month int, from, to *time.Time) ([]utils.Transaction, error) {
 	now := time.Now()
 	var start, end time.Time

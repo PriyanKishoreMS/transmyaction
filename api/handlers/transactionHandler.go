@@ -49,6 +49,32 @@ func (h *Handlers) updateTokens(token *oauth2.Token, email string) (*oauth2.Toke
 	return refreshedToken, nil
 }
 
+func (h *Handlers) InsertTransactionHandler(c echo.Context) error {
+	reqEmail := c.Get("email").(string)
+
+	var txn utils.Transaction
+	if err := c.Bind(&txn); err != nil {
+		fmt.Println("Error binding request body:", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	if txn.TxnRef == "" || txn.TxnRef == "nan" {
+		txn.TxnRef = fmt.Sprintf("MANUAL-%d", time.Now().UnixNano())
+	}
+
+	if reqEmail != txn.UserEmail {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "you can only add transactions for your own email"})
+	}
+
+	err := h.Data.Txns.InsertTransaction(txn)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "transaction inserted"})
+
+}
+
 func (h *Handlers) UpdateTransactionsHandler(c echo.Context) error {
 
 	email := c.Get("email").(string)

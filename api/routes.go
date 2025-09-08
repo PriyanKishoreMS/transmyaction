@@ -28,6 +28,7 @@ func SetupRoutes(h *handlers.Handlers) *echo.Echo {
 	e.GET("/refresh", h.RefreshTokenHandler, Authenticate(*h))
 
 	e.POST("/txns/:email", h.UpdateTransactionsHandler, Authenticate(*h))
+	e.POST("/txns/add", h.InsertTransactionHandler, Authenticate(*h))
 	e.GET("/txns/:email/:interval/:year/:month", h.GetTransactionsHandler, Authenticate(*h))
 	e.GET("/txns/:email", h.GetTransactionsHandler, Authenticate(*h))
 	e.POST("/txns/update", h.UpdateTransactionsHandler, Authenticate(*h))
